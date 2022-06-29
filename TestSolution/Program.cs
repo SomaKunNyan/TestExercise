@@ -41,7 +41,7 @@ namespace TestSolution
         {
             int[] sortedArr = values;
             Array.Sort(sortedArr);
-            return values[values.Length - 1] + values[values.Length - 2];
+            return sortedArr[sortedArr.Length - 1] + sortedArr[sortedArr.Length - 2];
         }
     }
     
@@ -57,7 +57,7 @@ namespace TestSolution
         {
             int[] sortedArr = values;
             Array.Sort(sortedArr);
-            return values[values.Length - 1] * values[values.Length - 2];
+            return values[sortedArr.Length - 1] * values[sortedArr.Length - 2];
         }
     }
 }
