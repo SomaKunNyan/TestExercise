@@ -1,0 +1,419 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: a571c0d144b14fd4a87a9d9b2aa9fcd6
+      name: Templates/Storage
+  templates:
+    - uuid: 7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e
+      template: 'HPE MSA 2060 SNMP'
+      name: 'HPE MSA 2060 SNMP'
+      description: |
+        ## Overview
+        Template for monitoring HPE MSA 2060 storage system via SNMP v2c/v3.
+        Collects basic equipment information: system info, controllers, disk groups, power supplies.
+
+        ## Requirements
+        - SNMP v2c or v3 enabled on MSA management port (default UDP/161)
+        - Configure SNMP interface on the Zabbix host
+        - Set {$SNMP.COMMUNITY} macro to match MSA SNMP community string
+
+        ## MIBs used
+        - SNMPv2-MIB       — standard MIB-II system info
+        - CPQARRAY-MIB     — 1.3.6.1.4.1.232.3 — controller and drive array info
+        - CPQHLTH-MIB      — 1.3.6.1.4.1.232.6 — health components (PSU, fans, temperature)
+
+        ## What is monitored
+        - System: description, name, contact, location, uptime
+        - Controllers: model, firmware version, condition (auto-discovered)
+        - Disk groups (logical drives): status and condition (auto-discovered)
+        - Power supplies: condition (auto-discovered)
+        - SNMP availability
+      groups:
+        - name: Templates/Storage
+      tags:
+        - tag: class
+          value: storage
+        - tag: target
+          value: hpe-msa-2060
+      macros:
+        - macro: '{$SNMP.COMMUNITY}'
+          value: public
+          description: 'SNMP v2c community string. Must match the MSA SNMP configuration.'
+        - macro: '{$MSA.UPTIME.MIN}'
+          value: '600'
+          description: 'Minimum expected uptime in seconds. Alert if below this value (default: 10 minutes).'
+
+      # -----------------------------------------------------------------------
+      # Static items
+      # -----------------------------------------------------------------------
+      items:
+        - uuid: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+          name: 'System: Description'
+          type: SNMP_AGENT
+          snmp_oid: '1.3.6.1.2.1.1.1.0'
+          key: system.descr
+          delay: 1h
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          description: 'MIB: SNMPv2-MIB::sysDescr.0. Human-readable hardware description of the MSA system.'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+
+        - uuid: b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5
+          name: 'System: Name'
+          type: SNMP_AGENT
+          snmp_oid: '1.3.6.1.2.1.1.5.0'
+          key: system.name
+          delay: 1h
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          description: 'MIB: SNMPv2-MIB::sysName.0. Administratively assigned name of this MSA.'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+
+        - uuid: c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6
+          name: 'System: Contact'
+          type: SNMP_AGENT
+          snmp_oid: '1.3.6.1.2.1.1.4.0'
+          key: system.contact
+          delay: 1h
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          description: 'MIB: SNMPv2-MIB::sysContact.0. Contact person for this MSA.'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+
+        - uuid: d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1
+          name: 'System: Location'
+          type: SNMP_AGENT
+          snmp_oid: '1.3.6.1.2.1.1.6.0'
+          key: system.location
+          delay: 1h
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          description: 'MIB: SNMPv2-MIB::sysLocation.0. Physical location of the MSA.'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1d
+          tags:
+            - tag: component
+              value: system
+
+        - uuid: e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+          name: 'System: Uptime'
+          type: SNMP_AGENT
+          snmp_oid: '1.3.6.1.2.1.1.3.0'
+          key: system.uptime
+          delay: 5m
+          history: 7d
+          trends: 365d
+          value_type: FLOAT
+          units: uptime
+          description: 'MIB: SNMPv2-MIB::sysUpTime.0. Time since the MSA was last re-initialized. Value in seconds.'
+          preprocessing:
+            - type: MULTIPLIER
+              parameters:
+                - '0.01'
+          tags:
+            - tag: component
+              value: system
+
+        - uuid: f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3
+          name: 'SNMP: Availability'
+          type: INTERNAL
+          key: 'zabbix[host,snmp,available]'
+          delay: 1m
+          history: 7d
+          trends: '0'
+          value_type: UNSIGNED
+          description: 'Availability of SNMP interface on this host. 1=available, 0=not available, 2=unknown.'
+          valuemap:
+            name: 'zabbix.host.available'
+          tags:
+            - tag: component
+              value: health
+
+      # -----------------------------------------------------------------------
+      # Low-Level Discovery rules
+      # -----------------------------------------------------------------------
+      discovery_rules:
+
+        # --- Controllers ---
+        - uuid: a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5
+          name: 'Controllers: Discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.4.1.232.3.2.3.1.1.3]'
+          key: cpqda.controller.discovery
+          delay: 1h
+          description: |
+            MIB: CPQARRAY-MIB::cpqDaCntlrModel.
+            Auto-discovers controllers present in the MSA enclosure.
+            Index format: <bus>.<slot> (e.g. 0.0 = bus 0, slot 0).
+          item_prototypes:
+            - uuid: b3c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6
+              name: 'Controller [{#SNMPINDEX}]: Model'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.232.3.2.3.1.1.3.{#SNMPINDEX}'
+              key: 'cpqda.controller.model[{#SNMPINDEX}]'
+              delay: 1h
+              history: 7d
+              trends: '0'
+              value_type: CHAR
+              description: 'MIB: CPQARRAY-MIB::cpqDaCntlrModel. Model description of the controller.'
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              tags:
+                - tag: component
+                  value: controller
+
+            - uuid: c4d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7
+              name: 'Controller [{#SNMPINDEX}]: Firmware version'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.232.3.2.3.1.1.8.{#SNMPINDEX}'
+              key: 'cpqda.controller.firmware[{#SNMPINDEX}]'
+              delay: 1h
+              history: 7d
+              trends: '0'
+              value_type: CHAR
+              description: 'MIB: CPQARRAY-MIB::cpqDaCntlrFWRev. Firmware revision of the controller.'
+              preprocessing:
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1d
+              tags:
+                - tag: component
+                  value: controller
+
+            - uuid: d5e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2
+              name: 'Controller [{#SNMPINDEX}]: Condition'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.232.3.2.3.1.1.6.{#SNMPINDEX}'
+              key: 'cpqda.controller.condition[{#SNMPINDEX}]'
+              delay: 5m
+              history: 7d
+              trends: 90d
+              value_type: UNSIGNED
+              description: |
+                MIB: CPQARRAY-MIB::cpqDaCntlrCondition.
+                Overall health condition of the controller.
+                1=other, 2=ok, 3=degraded, 4=failed.
+              valuemap:
+                name: 'HPE: Component condition'
+              tags:
+                - tag: component
+                  value: controller
+
+          trigger_prototypes:
+            - uuid: e6f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3
+              expression: 'last(/HPE MSA 2060 SNMP/cpqda.controller.condition[{#SNMPINDEX}])<>2'
+              name: 'Controller [{#SNMPINDEX}]: Condition is not OK (current value: {ITEM.VALUE})'
+              priority: HIGH
+              description: 'Controller condition is not OK. Log in to MSA management interface and check the controller status.'
+              tags:
+                - tag: component
+                  value: controller
+
+        # --- Disk Groups (Logical Drives) ---
+        - uuid: f7a2b3c4d5e6f7a2b3c4d5e6f7a2b3c4
+          name: 'Disk Groups: Discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.4.1.232.3.2.4.1.1.6]'
+          key: cpqda.logdrv.discovery
+          delay: 1h
+          description: |
+            MIB: CPQARRAY-MIB::cpqDaLogDrvStatus.
+            Auto-discovers logical drives (disk groups / RAID sets) configured on the MSA.
+          item_prototypes:
+            - uuid: a3b4c5d6e7f8a3b4c5d6e7f8a3b4c5d6
+              name: 'Disk Group [{#SNMPINDEX}]: Status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.232.3.2.4.1.1.6.{#SNMPINDEX}'
+              key: 'cpqda.logdrv.status[{#SNMPINDEX}]'
+              delay: 5m
+              history: 7d
+              trends: 90d
+              value_type: UNSIGNED
+              description: |
+                MIB: CPQARRAY-MIB::cpqDaLogDrvStatus.
+                Operational status of the logical drive.
+                1=other, 2=ok, 3=failed, 4=unconfigured, 5=recovering,
+                6=readyForRebuild, 7=rebuilding, 8=wrongDrive, 9=badConnect,
+                10=overheating, 11=shutdown, 12=expanding,
+                13=notAvailable, 14=queuedForExpansion.
+              valuemap:
+                name: 'HPE: Logical drive status'
+              tags:
+                - tag: component
+                  value: disk-group
+
+            - uuid: b4c5d6e7f8a3b4c5d6e7f8a3b4c5d6e7
+              name: 'Disk Group [{#SNMPINDEX}]: Condition'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.232.3.2.4.1.1.20.{#SNMPINDEX}'
+              key: 'cpqda.logdrv.condition[{#SNMPINDEX}]'
+              delay: 5m
+              history: 7d
+              trends: 90d
+              value_type: UNSIGNED
+              description: |
+                MIB: CPQARRAY-MIB::cpqDaLogDrvCondition.
+                Overall health condition of the logical drive.
+                1=other, 2=ok, 3=degraded, 4=failed.
+              valuemap:
+                name: 'HPE: Component condition'
+              tags:
+                - tag: component
+                  value: disk-group
+
+          trigger_prototypes:
+            - uuid: c5d6e7f8a3b4c5d6e7f8a3b4c5d6e7f8
+              expression: 'last(/HPE MSA 2060 SNMP/cpqda.logdrv.condition[{#SNMPINDEX}])<>2'
+              name: 'Disk Group [{#SNMPINDEX}]: Condition is not OK (current value: {ITEM.VALUE})'
+              priority: HIGH
+              description: 'Logical drive condition is not OK. Check disk group status in MSA management interface.'
+              tags:
+                - tag: component
+                  value: disk-group
+
+        # --- Power Supplies ---
+        - uuid: d6e7f8a3b4c5d6e7f8a3b4c5d6e7f8a3
+          name: 'Power Supplies: Discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.4.1.232.6.2.9.3.1.4]'
+          key: cpqhlth.psu.discovery
+          delay: 1h
+          description: |
+            MIB: CPQHLTH-MIB::cpqHeFltTolPowerSupplyCondition.
+            Auto-discovers fault-tolerant power supply units.
+          item_prototypes:
+            - uuid: e7f8a3b4c5d6e7f8a3b4c5d6e7f8a3b4
+              name: 'PSU [{#SNMPINDEX}]: Condition'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.232.6.2.9.3.1.4.{#SNMPINDEX}'
+              key: 'cpqhlth.psu.condition[{#SNMPINDEX}]'
+              delay: 5m
+              history: 7d
+              trends: 90d
+              value_type: UNSIGNED
+              description: |
+                MIB: CPQHLTH-MIB::cpqHeFltTolPowerSupplyCondition.
+                Condition of the power supply unit.
+                1=other, 2=ok, 3=degraded, 4=failed.
+              valuemap:
+                name: 'HPE: Component condition'
+              tags:
+                - tag: component
+                  value: power-supply
+
+          trigger_prototypes:
+            - uuid: f8a3b4c5d6e7f8a3b4c5d6e7f8a3b4c5
+              expression: 'last(/HPE MSA 2060 SNMP/cpqhlth.psu.condition[{#SNMPINDEX}])<>2'
+              name: 'PSU [{#SNMPINDEX}]: Condition is not OK (current value: {ITEM.VALUE})'
+              priority: HIGH
+              description: 'Power supply condition is not OK. Check hardware status and replace PSU if failed.'
+              tags:
+                - tag: component
+                  value: power-supply
+
+      # -----------------------------------------------------------------------
+      # Triggers (static items)
+      # -----------------------------------------------------------------------
+      triggers:
+        - uuid: a4b5c6d7e8f9a4b5c6d7e8f9a4b5c6d7
+          expression: 'last(/HPE MSA 2060 SNMP/zabbix[host,snmp,available])=0'
+          name: 'SNMP: No response from MSA'
+          priority: AVERAGE
+          description: 'SNMP is not available. MSA may be unreachable or SNMP is misconfigured.'
+          tags:
+            - tag: component
+              value: health
+
+        - uuid: b5c6d7e8f9a4b5c6d7e8f9a4b5c6d7e8
+          expression: 'last(/HPE MSA 2060 SNMP/system.uptime)<{$MSA.UPTIME.MIN}'
+          name: 'System: MSA has been restarted (uptime < 10 min)'
+          priority: WARNING
+          description: 'System uptime is less than {$MSA.UPTIME.MIN} seconds. The MSA may have restarted.'
+          manual_close: 'YES'
+          tags:
+            - tag: component
+              value: system
+
+      # -----------------------------------------------------------------------
+      # Value maps
+      # -----------------------------------------------------------------------
+      valuemaps:
+        - uuid: c6d7e8f9a4b5c6d7e8f9a4b5c6d7e8f9
+          name: 'HPE: Component condition'
+          mappings:
+            - value: '1'
+              newvalue: Other
+            - value: '2'
+              newvalue: OK
+            - value: '3'
+              newvalue: Degraded
+            - value: '4'
+              newvalue: Failed
+
+        - uuid: d7e8f9a4b5c6d7e8f9a4b5c6d7e8f9a4
+          name: 'HPE: Logical drive status'
+          mappings:
+            - value: '1'
+              newvalue: Other
+            - value: '2'
+              newvalue: OK
+            - value: '3'
+              newvalue: Failed
+            - value: '4'
+              newvalue: Unconfigured
+            - value: '5'
+              newvalue: Recovering
+            - value: '6'
+              newvalue: ReadyForRebuild
+            - value: '7'
+              newvalue: Rebuilding
+            - value: '8'
+              newvalue: WrongDrive
+            - value: '9'
+              newvalue: BadConnect
+            - value: '10'
+              newvalue: Overheating
+            - value: '11'
+              newvalue: Shutdown
+            - value: '12'
+              newvalue: Expanding
+            - value: '13'
+              newvalue: NotAvailable
+            - value: '14'
+              newvalue: QueuedForExpansion
+
+        - uuid: e8f9a4b5c6d7e8f9a4b5c6d7e8f9a4b5
+          name: 'zabbix.host.available'
+          mappings:
+            - value: '0'
+              newvalue: Not available
+            - value: '1'
+              newvalue: Available
+            - value: '2'
+              newvalue: Unknown
